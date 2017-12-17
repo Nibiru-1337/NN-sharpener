@@ -57,20 +57,27 @@ class NN_Sharpen:
         self.sess.run(init_op)
 
         i = 0
-        for img_path in train:
-            nn_img = NN_Image(img_path)
-            nn_img.getNumPyArr()
-            chunks = nn_img.get_image_chunks(chunk_size=(self.input_width, self.input_height))
-            for x in range(chunks.shape[0]):
-                for y in range(chunks.shape[1]):
-                    chunk = chunks[x, y]
-                    # reshape image to have a leading 1 dimension
-                    img_shape = chunk.shape
-                    img_reshaped = chunk.reshape(1, img_shape[0], img_shape[1], 3)
+        for idx in range(len(train)):
+            # prepare input and label image
+            nn_img_train = NN_Image(train[idx])
+            nn_img_train.getNumPyArr()
+            chunks_train = nn_img_train.get_image_chunks(chunk_size=(self.input_width, self.input_height))
+            nn_img_label = NN_Image(validate[idx])
+            nn_img_label.getNumPyArr()
+            chunks_label = nn_img_train.get_image_chunks(chunk_size=(self.input_width, self.input_height))
+            # iterate over chunks
+            for x in range(chunks_train.shape[0]):
+                for y in range(chunks_train.shape[1]):
+                    chunk_train = chunks_train[x, y]
+                    chunk_label = chunks_label[x, y]
+                    # reshape images to have a leading 1 dimension
+                    img_shape = chunk_train.shape
+                    img_train_reshaped = chunk_train.reshape(1, img_shape[0], img_shape[1], 3)
+                    img__label_reshaped = chunk_label.reshape(1, img_shape[0], img_shape[1], 3)
                     output_val, loss_val, _, summaries_val = self.sess.run([self.Y2, train_cost, optim, summaries],
                                                                            feed_dict={
-                                                                               self.input: img_reshaped,
-                                                                               self.img_label: img_reshaped
+                                                                               self.input: img_train_reshaped,
+                                                                               self.img_label: img__label_reshaped
                                                                            })
                     log.add_summary(summaries_val, i)
                     print("iter:{} loss:{}".format(i, loss_val))
@@ -158,19 +165,13 @@ class NN_Sharpen:
                 # reshape image to have a leading 1 dimension
                 img_shape = chunk.shape
                 img_reshaped = chunk.reshape(1, img_shape[0], img_shape[1], 3)
-                output_val = self.sess.run([self.Y2], feed_dict={
+                output_val = self.sess.run(self.Y2, feed_dict={
                     self.input: img_reshaped,
                     self.img_label: img_reshaped
                 })
-                output_val = output_val[0]
-                for x2 in range(chunk_x):
-                    for y2 in range(chunk_y):
-                        if output_val[0,x2,y2,0] > 1.0:
-                            output_val[0,x2,y2,0] = 1.0
-                        if output_val[0,x2,y2,1] > 1.0:
-                            output_val[0,x2,y2,1] = 1.0
-                        if output_val[0,x2,y2,2] > 1.0:
-                            output_val[0,x2,y2,2] = 1.0
+                # normalize for displaying
+                output_val[output_val > 1.0] = 1.0
+                # add chunk to final image
                 output[x * chunk_x:x * chunk_x + chunk_x, y * chunk_y:y * chunk_y + chunk_y, :] = output_val
         self.show_image(output)
 
@@ -205,13 +206,18 @@ class NN_Sharpen:
 def main():
     nn = NN_Sharpen()
     directory = '.\\data\\train\\'
+    labels = []
+    for i in range(101, 150):
+        path = os.path.join(directory, '{}.jpg'.format(i))
+        labels.append(path)
     imgs = []
-    for pathAndFilename in glob.iglob(os.path.join(directory, r'*.jpg')):
-        imgs.append(pathAndFilename)
-    #nn.train_on_images(imgs, None)
-    #nn.save_model(".\\saved_model\\model")
-    nn.load_model(".\\saved_model\\model")
-    nn.sharpen("data\\test2.jpg")
+    for i in range(101, 150):
+        path = os.path.join(directory, '{}_blur.jpg'.format(i))
+        imgs.append(path)
+    nn.train_on_images(imgs, labels)
+    nn.save_model(".\\saved_model\\model")
+    #nn.load_model(".\\saved_model\\model")
+    nn.sharpen("data\\test.jpg")
 
 
 if __name__ == "__main__":
