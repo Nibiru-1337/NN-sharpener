@@ -23,19 +23,37 @@ class NN_Sharpen:
         self.img_label = tf.placeholder(tf.float32, shape=[1, self.input_width, self.input_height, 3], name="img_label")
         self.input = tf.placeholder(tf.float32, shape=[1, self.input_width, self.input_height, 3], name="input")
         # f_sizeX, fsizeY, in channels, out channels
-        W1 = tf.get_variable("W1", initializer=tf.truncated_normal([5, 5, 3, 16], stddev=0.1))
-        B1 = tf.get_variable("B1", initializer=tf.ones([16]) / 10)
+        W_C1 = tf.get_variable("W_C1", initializer=tf.truncated_normal([5, 5, 3, 16], stddev=0.1))
+        B_C1 = tf.get_variable("B_C1", initializer=tf.ones([16]) / 10)
+
+        W_C2 = tf.get_variable("W_C2", initializer=tf.truncated_normal([5, 5, 16, 32], stddev=0.1))
+        B_C2 = tf.get_variable("B_C2", initializer=tf.ones([32]) / 10)
+
+        W_C3 = tf.get_variable("W_C3", initializer=tf.truncated_normal([5, 5, 32, 16], stddev=0.1))
+        B_C3 = tf.get_variable("B_C3", initializer=tf.ones([16]) / 10)
+
         W2 = tf.get_variable("W2", initializer=tf.truncated_normal([5, 5, 3, 16], stddev=0.1))
         B2 = tf.get_variable("B2", initializer=tf.ones([3]) / 10)
         # convolution
         downsample = 2
-        Y1 = tf.nn.leaky_relu(tf.add(tf.nn.conv2d(self.input, W1,
-                                                  strides=[1, downsample, downsample, 1],
-                                                  padding='SAME')
-                                     , B1), name="Y1")
+        Y_C1 = tf.nn.leaky_relu(tf.add(tf.nn.conv2d(self.input, W_C1,
+                                                    strides=[1, downsample, downsample, 1],
+                                                    padding='SAME')
+                                       , B_C1), name="Y_C1")
+
+        Y_C2 = tf.nn.leaky_relu(tf.add(tf.nn.conv2d(Y_C1, W_C2,
+                                                    strides=[1, 1, 1, 1],
+                                                    padding='SAME')
+                                       , B_C2), name="Y_C2")
+
+        Y_C3 = tf.nn.leaky_relu(tf.add(tf.nn.conv2d(Y_C2, W_C3,
+                                                    strides=[1, 1, 1, 1],
+                                                    padding='SAME')
+                                       , B_C3), name="Y_C3")
+
         # deconvolution
         upsample = 2
-        self.Y2 = tf.nn.relu(tf.add(tf.nn.conv2d_transpose(Y1, W2,
+        self.Y2 = tf.nn.relu(tf.add(tf.nn.conv2d_transpose(Y_C3, W2,
                                                            [1, self.input_width, self.input_height, 3],
                                                            strides=[1, upsample, upsample, 1],
                                                            padding='SAME')
