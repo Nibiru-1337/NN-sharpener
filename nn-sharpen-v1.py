@@ -4,10 +4,13 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
+from random import shuffle
 
 from ai.conv import ImageOperations
 from ai.conv.NN_Image import NN_Image
 
+min = 0
+max = 0
 
 class NN_Sharpen:
     def __init__(self):
@@ -47,7 +50,7 @@ class NN_Sharpen:
                                   , B2), name="Y")
         return layer
 
-    def train_on_images(self, train, validate):
+    def train_on_images(self, train, validate, num_of_elements):
         start = time.time()
         self.sess = tf.Session()
         # network set-up
@@ -55,12 +58,12 @@ class NN_Sharpen:
         self.input = tf.placeholder(tf.float32, shape=[1, self.input_width, self.input_height, 3], name="input")
         # f_sizeX, fsizeY, in channels, out channels
         layer = self.push_conv("1", [5, 5, 3, 16], 2, tf.nn.leaky_relu, self.input)
-        layer = self.push_conv("2", [5, 5, 16, 32], 1, tf.nn.leaky_relu, layer)
+        layer = self.push_conv("2", [5, 5, 16, 32], 2, tf.nn.leaky_relu, layer)
         layer = self.push_conv("3", [5, 5, 32, 32], 1, tf.nn.leaky_relu, layer)
         layer = self.push_conv("4", [5, 5, 32, 32], 1, tf.nn.leaky_relu, layer)
         layer = self.pop_conv("d1", [5, 5, 32, 32], 1, tf.nn.leaky_relu, layer)
         layer = self.pop_conv("d2", [5, 5, 32, 32], 1, tf.nn.leaky_relu, layer)
-        layer = self.pop_conv("d3", [5, 5, 16, 32], 1, tf.nn.leaky_relu, layer)
+        layer = self.pop_conv("d3", [5, 5, 16, 32], 2, tf.nn.leaky_relu, layer)
         self.Y = self.last_layer([5, 5, 3, 16], layer, 2)
 
         train_cost = tf.losses.mean_squared_error(self.img_label, self.Y)
@@ -78,32 +81,45 @@ class NN_Sharpen:
         init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
         self.sess.run(init_op)
 
+        indices = list(range(num_of_elements))
         i = 0
-        for idx in range(len(train)):
-            # prepare input and label image
-            nn_img_train = NN_Image(train[idx])
-            nn_img_train.getNumPyArr()
-            chunks_train = nn_img_train.get_image_chunks(chunk_size=(self.input_width, self.input_height))
-            nn_img_label = NN_Image(validate[idx])
-            nn_img_label.getNumPyArr()
-            chunks_label = nn_img_train.get_image_chunks(chunk_size=(self.input_width, self.input_height))
-            # iterate over chunks
-            for x in range(chunks_train.shape[0]):
-                for y in range(chunks_train.shape[1]):
-                    chunk_train = chunks_train[x, y]
-                    chunk_label = chunks_label[x, y]
-                    # reshape images to have a leading 1 dimension
-                    img_shape = chunk_train.shape
-                    img_train_reshaped = chunk_train.reshape(1, img_shape[0], img_shape[1], 3)
-                    img__label_reshaped = chunk_label.reshape(1, img_shape[0], img_shape[1], 3)
-                    output_val, loss_val, _, summaries_val = self.sess.run([self.Y, train_cost, optim, summaries],
-                                                                           feed_dict={
-                                                                               self.input: img_train_reshaped,
-                                                                               self.img_label: img__label_reshaped
-                                                                           })
-                    log.add_summary(summaries_val, i)
-                    print("iter:{} loss:{}".format(i, loss_val))
-                    i += 1
+        shuffle(indices)
+        while True:
+            for idx in indices:
+                # prepare input and label image
+
+                try:
+                    # If stopfile exists then we stop training
+                    open(".\\stopfile")
+                    print("learning took {}".format(time.time() - start))
+                    return
+                except IOError:
+                    None
+
+
+                nn_img_train = NN_Image(train[idx])
+                nn_img_train.getNumPyArr()
+                chunks_train = nn_img_train.get_image_chunks(chunk_size=(self.input_width, self.input_height))
+                nn_img_label = NN_Image(validate[idx])
+                nn_img_label.getNumPyArr()
+                chunks_label = nn_img_train.get_image_chunks(chunk_size=(self.input_width, self.input_height))
+                # iterate over chunks
+                for x in range(chunks_train.shape[0]):
+                    for y in range(chunks_train.shape[1]):
+                        chunk_train = chunks_train[x, y]
+                        chunk_label = chunks_label[x, y]
+                        # reshape images to have a leading 1 dimension
+                        img_shape = chunk_train.shape
+                        img_train_reshaped = chunk_train.reshape(1, img_shape[0], img_shape[1], 3)
+                        img__label_reshaped = chunk_label.reshape(1, img_shape[0], img_shape[1], 3)
+                        output_val, loss_val, _, summaries_val = self.sess.run([self.Y, train_cost, optim, summaries],
+                                                                               feed_dict={
+                                                                                   self.input: img_train_reshaped,
+                                                                                   self.img_label: img__label_reshaped
+                                                                               })
+                        log.add_summary(summaries_val, i)
+                        print("iter:{} loss:{}".format(i, loss_val))
+                        i += 1
 
         print("learning took {}".format(time.time() - start))
 
@@ -230,7 +246,9 @@ def main():
     nn = NN_Sharpen()
     directory = '.\\data\\train\\'
     labels = []
-    interval = range(141, 151)
+    min = 101
+    max = 200
+    interval = range(min, max)
     for i in interval:
         path = os.path.join(directory, '{}.jpg'.format(i))
         labels.append(path)
@@ -238,10 +256,10 @@ def main():
     for i in interval:
         path = os.path.join(directory, '{}_blur.jpg'.format(i))
         imgs.append(path)
-    #nn.train_on_images(imgs, labels)
-    #nn.save_model(".\\saved_model\\model")
-    nn.load_model(".\\saved_model\\model")
-    nn.sharpen("data\\test4.jpg")
+    nn.train_on_images(imgs, labels, max - min)
+    nn.save_model(".\\saved_model\\model")
+    #nn.load_model(".\\saved_model\\model")
+    nn.sharpen("data\\test3.jpg")
 
 
 if __name__ == "__main__":
