@@ -78,3 +78,10 @@ def rotate(path, angle):
     src_im = Image.open(path)
     im = src_im.rotate(angle, expand=False)
     im.save(path[:-4] + "_rotated.jpg")
+
+# Method takes list of floats, change it to list of tuples of 3, meaning respectively R,G,B values
+# then it takes those values and put them on the image and later saves it
+def saveFile(out, name):
+    out = out.dot(255)
+    img = Image.fromarray(out.astype('uint8'), "RGB")
+    img.save(name)

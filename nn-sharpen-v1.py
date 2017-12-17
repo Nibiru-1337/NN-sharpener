@@ -1,11 +1,11 @@
-import glob
 import os
+import time
 
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-import time
 
+from ai.conv import ImageOperations
 from ai.conv.NN_Image import NN_Image
 
 
@@ -15,6 +15,37 @@ class NN_Sharpen:
         self.batch_size = 5
         self.input_width = 256
         self.input_height = 256
+        self.layer_info = []
+
+    def push_conv(self, name, shape, downsample, activation, in_layer):
+        self.layer_info.append(in_layer.get_shape().as_list())
+        W = tf.get_variable("W_" + name, initializer=tf.truncated_normal(shape, stddev=0.1))
+        B = tf.get_variable("B_" + name, initializer=tf.ones(shape=[shape[-1]]) / 10)
+        out_layer = activation(tf.add(tf.nn.conv2d(in_layer, W,
+                                                   strides=[1, downsample, downsample, 1],
+                                                   padding='SAME'), B), name="CONV_" + name)
+        return out_layer
+
+    def pop_conv(self, name, shape, upsample, activation, in_layer):
+        conv_shape = self.layer_info.pop()
+        W = tf.get_variable("W_" + name, initializer=tf.truncated_normal(shape, stddev=0.1))
+        B = tf.get_variable("B_" + name, initializer=tf.ones([shape[-2]]) / 10)
+        layer = activation(tf.add(tf.nn.conv2d_transpose(in_layer, W,
+                                                         conv_shape,
+                                                         strides=[1, upsample, upsample, 1],
+                                                         padding='SAME')
+                                  , B), name="DECONV_" + name)
+        return layer
+
+    def last_layer(self, shape, in_layer, upsample):
+        W2 = tf.get_variable("W_out", initializer=tf.truncated_normal(shape, stddev=0.1))
+        B2 = tf.get_variable("B_out", initializer=tf.ones([3]) / 10)
+        layer = tf.nn.relu(tf.add(tf.nn.conv2d_transpose(in_layer, W2,
+                                                         [1, self.input_width, self.input_height, 3],
+                                                         strides=[1, upsample, upsample, 1],
+                                                         padding='SAME')
+                                  , B2), name="Y")
+        return layer
 
     def train_on_images(self, train, validate):
         start = time.time()
@@ -23,43 +54,16 @@ class NN_Sharpen:
         self.img_label = tf.placeholder(tf.float32, shape=[1, self.input_width, self.input_height, 3], name="img_label")
         self.input = tf.placeholder(tf.float32, shape=[1, self.input_width, self.input_height, 3], name="input")
         # f_sizeX, fsizeY, in channels, out channels
-        W_C1 = tf.get_variable("W_C1", initializer=tf.truncated_normal([5, 5, 3, 16], stddev=0.1))
-        B_C1 = tf.get_variable("B_C1", initializer=tf.ones([16]) / 10)
+        layer = self.push_conv("1", [5, 5, 3, 16], 2, tf.nn.leaky_relu, self.input)
+        layer = self.push_conv("2", [5, 5, 16, 32], 1, tf.nn.leaky_relu, layer)
+        layer = self.push_conv("3", [5, 5, 32, 32], 1, tf.nn.leaky_relu, layer)
+        layer = self.push_conv("4", [5, 5, 32, 32], 1, tf.nn.leaky_relu, layer)
+        layer = self.pop_conv("d1", [5, 5, 32, 32], 1, tf.nn.leaky_relu, layer)
+        layer = self.pop_conv("d2", [5, 5, 32, 32], 1, tf.nn.leaky_relu, layer)
+        layer = self.pop_conv("d3", [5, 5, 16, 32], 1, tf.nn.leaky_relu, layer)
+        self.Y = self.last_layer([5, 5, 3, 16], layer, 2)
 
-        W_C2 = tf.get_variable("W_C2", initializer=tf.truncated_normal([5, 5, 16, 32], stddev=0.1))
-        B_C2 = tf.get_variable("B_C2", initializer=tf.ones([32]) / 10)
-
-        W_C3 = tf.get_variable("W_C3", initializer=tf.truncated_normal([5, 5, 32, 16], stddev=0.1))
-        B_C3 = tf.get_variable("B_C3", initializer=tf.ones([16]) / 10)
-
-        W2 = tf.get_variable("W2", initializer=tf.truncated_normal([5, 5, 3, 16], stddev=0.1))
-        B2 = tf.get_variable("B2", initializer=tf.ones([3]) / 10)
-        # convolution
-        downsample = 2
-        Y_C1 = tf.nn.leaky_relu(tf.add(tf.nn.conv2d(self.input, W_C1,
-                                                    strides=[1, downsample, downsample, 1],
-                                                    padding='SAME')
-                                       , B_C1), name="Y_C1")
-
-        Y_C2 = tf.nn.leaky_relu(tf.add(tf.nn.conv2d(Y_C1, W_C2,
-                                                    strides=[1, 1, 1, 1],
-                                                    padding='SAME')
-                                       , B_C2), name="Y_C2")
-
-        Y_C3 = tf.nn.leaky_relu(tf.add(tf.nn.conv2d(Y_C2, W_C3,
-                                                    strides=[1, 1, 1, 1],
-                                                    padding='SAME')
-                                       , B_C3), name="Y_C3")
-
-        # deconvolution
-        upsample = 2
-        self.Y2 = tf.nn.relu(tf.add(tf.nn.conv2d_transpose(Y_C3, W2,
-                                                           [1, self.input_width, self.input_height, 3],
-                                                           strides=[1, upsample, upsample, 1],
-                                                           padding='SAME')
-                                    , B2), name="Y2")
-        train_cost = tf.losses.mean_squared_error(self.img_label, self.Y2)
-        # train_cost = (self.img_label - Y2) ** 2
+        train_cost = tf.losses.mean_squared_error(self.img_label, self.Y)
         optim = tf.train.AdamOptimizer(self.learning_rate).minimize(train_cost)
         # logging
         for value in [train_cost]:
@@ -92,7 +96,7 @@ class NN_Sharpen:
                     img_shape = chunk_train.shape
                     img_train_reshaped = chunk_train.reshape(1, img_shape[0], img_shape[1], 3)
                     img__label_reshaped = chunk_label.reshape(1, img_shape[0], img_shape[1], 3)
-                    output_val, loss_val, _, summaries_val = self.sess.run([self.Y2, train_cost, optim, summaries],
+                    output_val, loss_val, _, summaries_val = self.sess.run([self.Y, train_cost, optim, summaries],
                                                                            feed_dict={
                                                                                self.input: img_train_reshaped,
                                                                                self.img_label: img__label_reshaped
@@ -183,7 +187,7 @@ class NN_Sharpen:
                 # reshape image to have a leading 1 dimension
                 img_shape = chunk.shape
                 img_reshaped = chunk.reshape(1, img_shape[0], img_shape[1], 3)
-                output_val = self.sess.run(self.Y2, feed_dict={
+                output_val = self.sess.run(self.Y, feed_dict={
                     self.input: img_reshaped,
                     self.img_label: img_reshaped
                 })
@@ -191,7 +195,8 @@ class NN_Sharpen:
                 output_val[output_val > 1.0] = 1.0
                 # add chunk to final image
                 output[x * chunk_x:x * chunk_x + chunk_x, y * chunk_y:y * chunk_y + chunk_y, :] = output_val
-        self.show_image(output)
+        #self.show_image(output)
+        ImageOperations.saveFile(output, ".\\{}.jpg".format(img))
 
     # http://cv-tricks.com/tensorflow-tutorial/save-restore-tensorflow-models-quick-complete-tutorial/
     def load_model(self, path):
@@ -205,15 +210,15 @@ class NN_Sharpen:
         saver.restore(self.sess, tf.train.latest_checkpoint(path))
 
         # get variables
-        out_chnls = 3
-        W1 = tf.get_variable("W1", shape=[5, 5, 3, out_chnls])
-        B1 = tf.get_variable("B1", shape=[out_chnls])
-        W2 = tf.get_variable("W2", shape=[5, 5, 3, out_chnls])
-        B2 = tf.get_variable("B2", shape=[out_chnls])
+        # out_chnls = 3
+        # W1 = tf.get_variable("W1", shape=[5, 5, 3, out_chnls])
+        # B1 = tf.get_variable("B1", shape=[out_chnls])
+        # W2 = tf.get_variable("W2", shape=[5, 5, 3, out_chnls])
+        # B2 = tf.get_variable("B2", shape=[out_chnls])
 
         graph = tf.get_default_graph()
-        #self.Y2 = graph.get_tensor_by_name("Y2/Maximum:0")
-        self.Y2 = graph.get_tensor_by_name("Y2:0")
+        # self.Y2 = graph.get_tensor_by_name("Y2/Maximum:0")
+        self.Y = graph.get_tensor_by_name("Y:0")
         self.input = graph.get_tensor_by_name("input:0")
         self.img_label = graph.get_tensor_by_name("img_label:0")
 
@@ -225,17 +230,18 @@ def main():
     nn = NN_Sharpen()
     directory = '.\\data\\train\\'
     labels = []
-    for i in range(101, 150):
+    interval = range(141, 151)
+    for i in interval:
         path = os.path.join(directory, '{}.jpg'.format(i))
         labels.append(path)
     imgs = []
-    for i in range(101, 150):
+    for i in interval:
         path = os.path.join(directory, '{}_blur.jpg'.format(i))
         imgs.append(path)
-    nn.train_on_images(imgs, labels)
-    nn.save_model(".\\saved_model\\model")
-    #nn.load_model(".\\saved_model\\model")
-    nn.sharpen("data\\test.jpg")
+    #nn.train_on_images(imgs, labels)
+    #nn.save_model(".\\saved_model\\model")
+    nn.load_model(".\\saved_model\\model")
+    nn.sharpen("data\\test4.jpg")
 
 
 if __name__ == "__main__":

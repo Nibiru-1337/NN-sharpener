@@ -30,12 +30,7 @@ class NN_Image:
         return img.resize((width_size, height_size), Image.ANTIALIAS)
 
 
-    # Method takes list of floats, change it to list of tuples of 3, meaning respectively R,G,B values
-    # then it takes those values and put them on the image and later saves it
-    def saveFile(self, out, name):
-        out = out.dot(255)
-        img = Image.fromarray(out.astype('uint8'), self.org_mode)
-        img.save(name)
+
 
     def get_image_chunks(self, chunk_size=(255, 255)):
         y_range = self.org_size[0] // chunk_size[0]
