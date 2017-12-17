@@ -1,5 +1,6 @@
 from skimage.filters import gaussian
 
+from ai.conv import ImageOperations
 from ai.conv.NN_Image import NN_Image
 from ai.conv.ImageOperations import get_image_from_chunks, get_image_chunks, ripple, rotate
 import random
@@ -36,7 +37,7 @@ def blur_directory(path):
         chunk_size = (npImg.shape[0]//50, npImg.shape[1]//50)
         result = blur(npImg, chunk_size=chunk_size)
         new_file = pathAndFilename[:-4] + '_blur.jpg'
-        read_image.saveFile(result, new_file)
+        ImageOperations.saveFile(result, new_file)
         print('DONE:{}'.format(new_file))
 
 def clear_blur(path):
@@ -58,13 +59,13 @@ def wat_test():
     read_image = NN_Image('.\\example.jpg')
     npImg = read_image.getNumPyArr()
     result = blur(npImg, chunk_size=(npImg.shape[0]//50,npImg.shape[1]//50))
-    read_image.saveFile(result, 'example_blur.jpg')
+    ImageOperations.saveFile(result, 'example_blur.jpg')
 
     rotate('.\\example.jpg', 15)
     read_image = NN_Image('.\\example_rotated.jpg')
     npImg = read_image.getNumPyArr()
     result = blur(npImg, chunk_size=(npImg.shape[0] // 50, npImg.shape[1] // 50))
-    read_image.saveFile(result, 'example_rotated_blur.jpg')
+    ImageOperations.saveFile(result, 'example_rotated_blur.jpg')
 
 def main():
     directory = '.\\data\\train\\'
