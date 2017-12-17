@@ -17,7 +17,7 @@ class NN_Image:
         #resize_img = self.resize(img, size=(32,32))
         img.load()
         pix = np.asarray(img, dtype='float64')
-        normalized_pix = pix / 255
+        normalized_pix = pix / 256
         self.img = normalized_pix
         return normalized_pix
 
