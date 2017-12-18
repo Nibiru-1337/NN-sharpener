@@ -6,15 +6,18 @@ import numpy as np
 import tensorflow as tf
 from random import shuffle
 
+from PIL import Image
+
 from ai.conv import ImageOperations
 from ai.conv.NN_Image import NN_Image
 
 min = 0
 max = 0
 
+
 class NN_Sharpen:
     def __init__(self):
-        self.learning_rate = 0.001
+        self.learning_rate = 0.0001
         self.batch_size = 5
         self.input_width = 256
         self.input_height = 256
@@ -56,21 +59,26 @@ class NN_Sharpen:
         # network set-up
         self.img_label = tf.placeholder(tf.float32, shape=[1, self.input_width, self.input_height, 3], name="img_label")
         self.input = tf.placeholder(tf.float32, shape=[1, self.input_width, self.input_height, 3], name="input")
+
         # f_sizeX, fsizeY, in channels, out channels
         layer = self.push_conv("1", [5, 5, 3, 16], 2, tf.nn.leaky_relu, self.input)
-        layer = self.push_conv("2", [5, 5, 16, 32], 2, tf.nn.leaky_relu, layer)
-        layer = self.push_conv("3", [5, 5, 32, 32], 1, tf.nn.leaky_relu, layer)
-        layer = self.push_conv("4", [5, 5, 32, 32], 1, tf.nn.leaky_relu, layer)
-        layer = self.pop_conv("d1", [5, 5, 32, 32], 1, tf.nn.leaky_relu, layer)
-        layer = self.pop_conv("d2", [5, 5, 32, 32], 1, tf.nn.leaky_relu, layer)
-        layer = self.pop_conv("d3", [5, 5, 16, 32], 2, tf.nn.leaky_relu, layer)
+        layer = self.push_conv("2", [3, 3, 16, 32], 2, tf.nn.leaky_relu, layer)
+        layer = self.push_conv("3", [3, 3, 32, 32], 1, tf.nn.leaky_relu, layer)
+        layer = self.push_conv("4", [3, 3, 32, 32], 1, tf.nn.leaky_relu, layer)
+
+        layer = self.pop_conv("d1", [3, 3, 32, 32], 1, tf.nn.leaky_relu, layer)
+        layer = self.pop_conv("d2", [3, 3, 32, 32], 1, tf.nn.leaky_relu, layer)
+        layer = self.pop_conv("d3", [3, 3, 16, 32], 2, tf.nn.leaky_relu, layer)
         self.Y = self.last_layer([5, 5, 3, 16], layer, 2)
 
-        train_cost = tf.losses.mean_squared_error(self.img_label, self.Y)
+        train_cost = tf.losses.mean_squared_error(self.Y, self.img_label)
         optim = tf.train.AdamOptimizer(self.learning_rate).minimize(train_cost)
         # logging
         for value in [train_cost]:
             tf.summary.scalar("train_cost.{}".format(time.time()), value)
+
+
+
         summaries = tf.summary.merge_all()
         log = tf.summary.FileWriter("logs", self.sess.graph)
 
@@ -91,11 +99,10 @@ class NN_Sharpen:
                 try:
                     # If stopfile exists then we stop training
                     open(".\\stopfile")
-                    print("learning took {}".format(time.time() - start))
+                    print("learning stops - took {}".format(time.time() - start))
                     return
                 except IOError:
                     None
-
 
                 nn_img_train = NN_Image(train[idx])
                 nn_img_train.getNumPyArr()
@@ -121,7 +128,10 @@ class NN_Sharpen:
                         print("iter:{} loss:{}".format(i, loss_val))
                         i += 1
 
-        print("learning took {}".format(time.time() - start))
+                        if i % 100 == 0:
+                            tf.summary.image("given - iter{}".format(str(i)), self.input)
+                            tf.summary.image("result - iter.{}".format(str(i)), self.Y)
+                            self.sharpen("data\\", "test4", ".jpg", str(i))
 
     def show_image(self, img):
         # out_resized = img.reshape((img.shape[0], img.shape[1], 3))
@@ -130,65 +140,10 @@ class NN_Sharpen:
         figManager.window.showMaximized()
         plt.show()
 
-    # https://stackoverflow.com/questions/37771321/how-to-use-tensorflow-to-implement-deconvolution#37772219
-    # http://cv-tricks.com/image-segmentation/transpose-convolution-in-tensorflow/
-    def get_bilinear_filter(self, filter_shape, upscale_factor):
-        ##filter_shape is [width, height, num_in_channels, num_out_channels]
-        kernel_size = filter_shape[1]
-        ### Centre location of the filter for which value is calculated
-        if kernel_size % 2 == 1:
-            centre_location = upscale_factor - 1
-        else:
-            centre_location = upscale_factor - 0.5
 
-        bilinear = np.zeros([filter_shape[0], filter_shape[1]])
-        for x in range(filter_shape[0]):
-            for y in range(filter_shape[1]):
-                ##Interpolation Calculation
-                value = (1 - abs((x - centre_location) / upscale_factor)) * (
-                    1 - abs((y - centre_location) / upscale_factor))
-                bilinear[x, y] = value
-        weights = np.zeros(filter_shape)
-        for i in range(filter_shape[2]):
-            weights[:, :, i, i] = bilinear
-        init = tf.constant_initializer(value=weights,
-                                       dtype=tf.float32)
 
-        bilinear_weights = tf.get_variable(name="decon_bilinear_filter", initializer=init, shape=weights.shape)
-        return bilinear_weights
-
-    def upsample_layer(self, bottom, n_channels, upscale_factor):
-
-        kernel_size = 2 * upscale_factor - upscale_factor % 2
-        stride = upscale_factor
-        strides = [1, stride, stride, 1]
-        with tf.variable_scope("upsample"):
-            # Shape of the bottom tensor
-            in_shape = tf.shape(bottom)
-
-            h = ((in_shape[1] - 1) * stride) + 1
-            w = ((in_shape[2] - 1) * stride) + 1
-            new_shape = [in_shape[0], h, w, n_channels]
-            output_shape = tf.stack(new_shape)
-
-            filter_shape = [kernel_size, kernel_size, n_channels, n_channels]
-
-            weights = self.get_bilinear_filter(filter_shape, upscale_factor)
-            deconv = tf.nn.conv2d_transpose(bottom, weights, output_shape, strides=strides, padding='SAME')
-
-        return deconv
-
-    def show_shapes(self, img, conv_op, deconv_op, output):
-        print("""
-            input (shape {})
-            conv_op filters (shape {})
-            deconv_op filters (shape {})
-            output (shape {})
-            """.format(
-            img.shape, conv_op.shape, deconv_op, output))
-
-    def sharpen(self, img):
-        nn_img = NN_Image(img)
+    def sharpen(self, baseDir, imgName, imgExtension, iteration=""):
+        nn_img = NN_Image(baseDir + imgName + imgExtension)
         nn_img.getNumPyArr()
         chunks = nn_img.get_image_chunks(chunk_size=(self.input_width, self.input_height))
         x_max = chunks.shape[0] * chunks.shape[2]
@@ -200,9 +155,12 @@ class NN_Sharpen:
         for x in range(chunks.shape[0]):
             for y in range(chunks.shape[1]):
                 chunk = chunks[x, y]
+
+                x_shape = chunk.shape[0]
+                y_shape = chunk.shape[1]
+
                 # reshape image to have a leading 1 dimension
-                img_shape = chunk.shape
-                img_reshaped = chunk.reshape(1, img_shape[0], img_shape[1], 3)
+                img_reshaped = chunk.reshape(1, x_shape, y_shape, 3)
                 output_val = self.sess.run(self.Y, feed_dict={
                     self.input: img_reshaped,
                     self.img_label: img_reshaped
@@ -211,12 +169,11 @@ class NN_Sharpen:
                 output_val[output_val > 1.0] = 1.0
                 # add chunk to final image
                 output[x * chunk_x:x * chunk_x + chunk_x, y * chunk_y:y * chunk_y + chunk_y, :] = output_val
-        #self.show_image(output)
-        ImageOperations.saveFile(output, ".\\{}.jpg".format(img))
+        # self.show_image(output)
+        ImageOperations.saveFile(output, ".\\{}.jpg".format(baseDir + "test\\" + imgName + "+" + iteration))
 
     # http://cv-tricks.com/tensorflow-tutorial/save-restore-tensorflow-models-quick-complete-tutorial/
     def load_model(self, path):
-        tf.reset_default_graph()
 
         # Add ops to save and restore all the variables.
         saver = tf.train.import_meta_graph('{}.ckpt.meta'.format(path))
@@ -244,6 +201,7 @@ class NN_Sharpen:
 
 def main():
     nn = NN_Sharpen()
+    tf.reset_default_graph()
     directory = '.\\data\\train\\'
     labels = []
     min = 101
@@ -258,8 +216,8 @@ def main():
         imgs.append(path)
     nn.train_on_images(imgs, labels, max - min)
     nn.save_model(".\\saved_model\\model")
-    #nn.load_model(".\\saved_model\\model")
-    nn.sharpen("data\\test3.jpg")
+    # nn.load_model(".\\saved_model\\model")
+    nn.sharpen("data\\", "test4", ".jpg")
 
 
 if __name__ == "__main__":
