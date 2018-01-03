@@ -18,8 +18,8 @@ class NN_Sharpen:
     def __init__(self):
         self.learning_rate = 0.0001
         self.batch_size = 5
-        self.input_width = 256
-        self.input_height = 256
+        self.input_width = 16
+        self.input_height = 16
         self.layer_info = []
 
     def push_conv(self, name, shape, downsample, activation, in_layer):
@@ -69,6 +69,7 @@ class NN_Sharpen:
        # layer = self.pop_conv("d2", [3, 3, 32, 32], 1, tf.nn.leaky_relu, layer)
         layer = self.pop_conv("d3", [3, 3, 32, 64], 1, tf.nn.leaky_relu, layer)
         self.Y = self.last_layer([3, 3, 3, 32], layer, 1)
+
 
         train_cost = tf.losses.mean_squared_error(self.Y, self.img_label)
         optim = tf.train.AdamOptimizer(self.learning_rate).minimize(train_cost)
@@ -124,7 +125,13 @@ class NN_Sharpen:
                                                                                    self.input: img_train_reshaped,
                                                                                    self.img_label: img__label_reshaped
                                                                                })
+                        img__label_reshaped = img__label_reshaped * 256
+                        output_val = output_val * 256
+
+                        mse = ((img__label_reshaped - output_val) ** 2).mean(axis=None)
+
                         log.add_summary(summaries_val, i)
+                        print("iter:{} loss-new:{}".format(i, mse/256))
                         print("iter:{} loss:{}".format(i, loss_val))
                         i += 1
 
@@ -218,14 +225,15 @@ def main():
     imgs = []
 
 
-    # i = 0
-    # for path in labels:
-    #     blurred_image = Image.open(path).filter(ImageFilter.BLUR)
-    #     new_path = ".\\data\\new_blur\\" + iter[i] + "_blurred.jpg"
-    #     blurred_image.save(new_path)
-    #     i = i + 1
-    #     # imgs.append(new_path)
-    #
+    i = 0
+    for path in labels:
+
+        blurred_image = Image.open(path).filter(ImageFilter.BLUR)
+        new_path = ".\\data\\new_blur_test\\" + iter[i] + "_blurred.jpg"
+        blurred_image.save(new_path)
+        i = i + 1
+        # imgs.append(new_path)
+
 
     imgs = getPathsFromDir(dirStudent)
 

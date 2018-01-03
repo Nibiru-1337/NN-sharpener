@@ -200,8 +200,8 @@ class DeblurNN:
                 break
             if self.stop_criterion == "file":
                 try:
-                    # If stopfile exists then we stop training
-                    open("stopfile")
+                    # If stopfile2 exists then we stop training
+                    open("stopfile2")
                     break
                 except IOError:
                     None
