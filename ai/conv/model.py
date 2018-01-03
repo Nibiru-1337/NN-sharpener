@@ -1,11 +1,10 @@
-import tensorflow as tf
-import numpy as np
-import math
-
-from functools import reduce
-import matplotlib.pyplot as plt
 import csv
+import math
+from functools import reduce
 
+import matplotlib.pyplot as plt
+import numpy as np
+import tensorflow as tf
 from PIL import Image
 
 
@@ -30,11 +29,8 @@ class DeblurNN:
         self.input = tf.placeholder(tf.float32, shape=[None, self.img_width, self.img_heigth, 3])
         self.output = self.init_NN(self.input)
 
-
-
         self.stop_criterion = "file"
         self.save = True
-
 
     def init_NN(self, input):
         layer = input
@@ -71,7 +67,7 @@ class DeblurNN:
             W = self.W[wkey]
         else:
             W = tf.Variable(V)
-            if wkey==None:
+            if wkey == None:
                 wkey = str(self.W_cnt)
                 self.W_cnt += 1
             self.W[wkey] = W
@@ -83,8 +79,9 @@ class DeblurNN:
 
         input_size = x.get_shape().as_list()
 
-        W = self.add_variable(tf.random_normal(filter_shape, stddev=1.0 / math.sqrt(reduce(lambda x,y: x*y,filter_shape,1.0))), wkey)
-        x = tf.nn.conv2d(x, W, [1,stride,stride,1], padding="SAME")
+        W = self.add_variable(
+            tf.random_normal(filter_shape, stddev=1.0 / math.sqrt(reduce(lambda x, y: x * y, filter_shape, 1.0))), wkey)
+        x = tf.nn.conv2d(x, W, [1, stride, stride, 1], padding="SAME")
 
         self.conv_info.append((W, input_size, stride))
 
@@ -96,8 +93,9 @@ class DeblurNN:
 
         info = self.conv_info.pop()
 
-        W = self.add_variable(tf.random_normal(info[0].get_shape().as_list(), stddev=1.0 / math.sqrt(reduce(lambda x,y: x*y,info[0].get_shape().as_list(),1.0))), wkey)
-        x = tf.nn.conv2d_transpose(x, W, tf.stack(info[1]), [1,info[2],info[2],1], padding="SAME")
+        W = self.add_variable(tf.random_normal(info[0].get_shape().as_list(), stddev=1.0 / math.sqrt(
+            reduce(lambda x, y: x * y, info[0].get_shape().as_list(), 1.0))), wkey)
+        x = tf.nn.conv2d_transpose(x, W, tf.stack(info[1]), [1, info[2], info[2], 1], padding="SAME")
 
         return activation(x)
 
@@ -114,16 +112,17 @@ class DeblurNN:
 
         return activation(tf.add(tf.nn.conv2d(x, W, [1, stride, stride, 1], padding=padding), b))
 
-    def make_file_pipeline(self, image_files, label_files, batch_size=None, im_width=100, im_height=100, shuffle=True, sess=None):
+    def make_file_pipeline(self, image_files, label_files, batch_size=None, im_width=100, im_height=100, shuffle=True,
+                           sess=None):
         if batch_size == None:
             batch_size = self.batch_size
 
-        #with open(image_files[0], "rb") as f:
+        # with open(image_files[0], "rb") as f:
         #    lines = f.readlines()
         #    print(lines)
 
-        #image_files_prod = tf.train.string_input_producer(["S:\\Users\\Nibiru\\Source\\PyCharm-Projects\\Neural-Network-v2\\data\\train\\101_blur.jpg"], shuffle=shuffle, seed=1)
-        #label_files_prod = tf.train.string_input_producer(["S:\\Users\\Nibiru\\Source\\PyCharm-Projects\\Neural-Network-v2\\data\\train\\101.jpg"], shuffle=shuffle, seed=1)
+        # image_files_prod = tf.train.string_input_producer(["S:\\Users\\Nibiru\\Source\\PyCharm-Projects\\Neural-Network-v2\\data\\train\\101_blur.jpg"], shuffle=shuffle, seed=1)
+        # label_files_prod = tf.train.string_input_producer(["S:\\Users\\Nibiru\\Source\\PyCharm-Projects\\Neural-Network-v2\\data\\train\\101.jpg"], shuffle=shuffle, seed=1)
         image_files_prod = tf.train.string_input_producer(image_files, shuffle=shuffle, seed=1)
         label_files_prod = tf.train.string_input_producer(label_files, shuffle=shuffle, seed=1)
 
@@ -139,8 +138,8 @@ class DeblurNN:
         print(image.shape)
         Image._show(Image.fromarray(np.asarray(image)))
 
-        #image = tf.to_float() / 256.0
-        #label = tf.to_float()/ 256.0
+        # image = tf.to_float() / 256.0
+        # label = tf.to_float()/ 256.0
 
         image = tf.reshape(image, [im_width, im_height, 3])
         label = tf.reshape(label, [im_width, im_height, 3])
@@ -264,6 +263,7 @@ class DeblurNN:
         sess = tf.Session()
         return sess
 
+
 def test():
     filename_queue = tf.train.string_input_producer(['Climatic.png'])  # list of files to read
 
@@ -290,30 +290,32 @@ def test():
     coord.request_stop()
     coord.join(threads)
 
+
 def main():
     ims = DeblurNN()
 
     tf.set_random_seed(5)
-    #test()
-    #return
+    # test()
+    # return
 
     sess = ims.train_on_images(
         ["..\\..\\data\\train\\" + str(i) + "_blur.jpg" for i in range(101, 812)]
-        + ["..\\..\\data\\train\\"+str(i)+"_rotated_blur.jpg" for i in range(101, 812)],
-        ["..\\..\\data\\train\\"+str(i)+".jpg" for i in range(101, 812)]
-        + ["..\\..\\data\\train\\"+str(i)+"_rotated.jpg" for i in range(101, 812)],
-        ["..\\..\\data\\validate\\{}_blur.jpg".format(i) for i in range(101,200)],
-        ["..\\..\\data\\validate\\{}.jpg".format(i) for i in range(101,200)]
+        + ["..\\..\\data\\train\\" + str(i) + "_rotated_blur.jpg" for i in range(101, 812)],
+        ["..\\..\\data\\train\\" + str(i) + ".jpg" for i in range(101, 812)]
+        + ["..\\..\\data\\train\\" + str(i) + "_rotated.jpg" for i in range(101, 812)],
+        ["..\\..\\data\\validate\\{}_blur.jpg".format(i) for i in range(101, 200)],
+        ["..\\..\\data\\validate\\{}.jpg".format(i) for i in range(101, 200)]
     )
 
-    #sess = ims.load_model("../savedmodels/sharpener")
+    # sess = ims.load_model("../savedmodels/sharpener")
 
-    #ims.sharpen(
+    # ims.sharpen(
     #    ["../data/validation_1_train" + str(i) + ".png" for i in range(10)], "_after",
     #    sess
-    #)##
+    # )##
     # ims.test(sess)
     # ims.diagnostics(sess)
+
 
 if __name__ == "__main__":
     main()

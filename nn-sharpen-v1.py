@@ -1,12 +1,11 @@
 import os
 import time
+from random import shuffle
 
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-from random import shuffle
-
-from PIL import Image
+from PIL import Image, ImageFilter
 
 from ai.conv import ImageOperations
 from ai.conv.NN_Image import NN_Image
@@ -53,7 +52,7 @@ class NN_Sharpen:
                                   , B2), name="Y")
         return layer
 
-    def train_on_images(self, train, validate, num_of_elements):
+    def train_on_images(self, train, validate):
         start = time.time()
         self.sess = tf.Session()
         # network set-up
@@ -61,23 +60,21 @@ class NN_Sharpen:
         self.input = tf.placeholder(tf.float32, shape=[1, self.input_width, self.input_height, 3], name="input")
 
         # f_sizeX, fsizeY, in channels, out channels
-        layer = self.push_conv("1", [5, 5, 3, 16], 2, tf.nn.leaky_relu, self.input)
-        layer = self.push_conv("2", [3, 3, 16, 32], 2, tf.nn.leaky_relu, layer)
-        layer = self.push_conv("3", [3, 3, 32, 32], 1, tf.nn.leaky_relu, layer)
-        layer = self.push_conv("4", [3, 3, 32, 32], 1, tf.nn.leaky_relu, layer)
+        layer = self.push_conv("1", [3, 3, 3, 32], 1, tf.nn.leaky_relu, self.input)
+        layer = self.push_conv("2", [3, 3, 32, 64], 1, tf.nn.leaky_relu, layer)
+       # layer = self.push_conv("3", [3, 3, 32, 32], 1, tf.nn.leaky_relu, layer)
+       # layer = self.push_conv("4", [3, 3, 32, 32], 1, tf.nn.leaky_relu, layer)
 
-        layer = self.pop_conv("d1", [3, 3, 32, 32], 1, tf.nn.leaky_relu, layer)
-        layer = self.pop_conv("d2", [3, 3, 32, 32], 1, tf.nn.leaky_relu, layer)
-        layer = self.pop_conv("d3", [3, 3, 16, 32], 2, tf.nn.leaky_relu, layer)
-        self.Y = self.last_layer([5, 5, 3, 16], layer, 2)
+       # layer = self.pop_conv("d1", [3, 3, 32, 32], 1, tf.nn.leaky_relu, layer)
+       # layer = self.pop_conv("d2", [3, 3, 32, 32], 1, tf.nn.leaky_relu, layer)
+        layer = self.pop_conv("d3", [3, 3, 32, 64], 1, tf.nn.leaky_relu, layer)
+        self.Y = self.last_layer([3, 3, 3, 32], layer, 1)
 
         train_cost = tf.losses.mean_squared_error(self.Y, self.img_label)
         optim = tf.train.AdamOptimizer(self.learning_rate).minimize(train_cost)
         # logging
         for value in [train_cost]:
             tf.summary.scalar("train_cost.{}".format(time.time()), value)
-
-
 
         summaries = tf.summary.merge_all()
         log = tf.summary.FileWriter("logs", self.sess.graph)
@@ -89,10 +86,13 @@ class NN_Sharpen:
         init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
         self.sess.run(init_op)
 
-        indices = list(range(num_of_elements))
+        indices = list(range(len(validate)))
         i = 0
-        shuffle(indices)
+
         while True:
+
+            shuffle(indices)
+
             for idx in indices:
                 # prepare input and label image
 
@@ -128,10 +128,8 @@ class NN_Sharpen:
                         print("iter:{} loss:{}".format(i, loss_val))
                         i += 1
 
-                        if i % 100 == 0:
-                            tf.summary.image("given - iter{}".format(str(i)), self.input)
-                            tf.summary.image("result - iter.{}".format(str(i)), self.Y)
-                            self.sharpen("data\\", "test4", ".jpg", str(i))
+                        if i % 500 == 0:
+                            self.sharpen("data\\", "0046_blurred", ".jpg", str(i))
 
     def show_image(self, img):
         # out_resized = img.reshape((img.shape[0], img.shape[1], 3))
@@ -139,8 +137,6 @@ class NN_Sharpen:
         figManager = plt.get_current_fig_manager()
         figManager.window.showMaximized()
         plt.show()
-
-
 
     def sharpen(self, baseDir, imgName, imgExtension, iteration=""):
         nn_img = NN_Image(baseDir + imgName + imgExtension)
@@ -199,25 +195,52 @@ class NN_Sharpen:
         self.saver.save(self.sess, path + ".ckpt")
 
 
+def getPathsFromDir(dirPath):
+    labels = []
+    for x in os.walk(dirPath):
+        new_list = [dirPath + x for x in x[2]]
+        labels = new_list
+
+    return labels
+
 def main():
     nn = NN_Sharpen()
     tf.reset_default_graph()
-    directory = '.\\data\\train\\'
+    dirTeacher = '.\\data\\faces\\'
+    dirStudent = '.\\data\\new_blur\\'
     labels = []
-    min = 101
-    max = 200
+
     interval = range(min, max)
-    for i in interval:
-        path = os.path.join(directory, '{}.jpg'.format(i))
-        labels.append(path)
+    labels = getPathsFromDir(dirTeacher)
+    iter = ["{0:004}".format(i) for i in range(len(labels))]
+
+
     imgs = []
-    for i in interval:
-        path = os.path.join(directory, '{}_blur.jpg'.format(i))
-        imgs.append(path)
-    nn.train_on_images(imgs, labels, max - min)
-    nn.save_model(".\\saved_model\\model")
-    # nn.load_model(".\\saved_model\\model")
-    nn.sharpen("data\\", "test4", ".jpg")
+
+
+    # i = 0
+    # for path in labels:
+    #     blurred_image = Image.open(path).filter(ImageFilter.BLUR)
+    #     new_path = ".\\data\\new_blur\\" + iter[i] + "_blurred.jpg"
+    #     blurred_image.save(new_path)
+    #     i = i + 1
+    #     # imgs.append(new_path)
+    #
+
+    imgs = getPathsFromDir(dirStudent)
+
+    # for i in interval:
+    #     new_path = ".\\data\\new_blur\\" + iter[i] + "_blurred.jpg"
+    #     imgs.append(new_path)
+
+    train = True
+
+    if train:
+        nn.train_on_images(imgs, labels)
+        nn.save_model(".\\saved_model\\model")
+    else:
+        nn.load_model(".\\saved_model\\model")
+        nn.sharpen("data\\", "0196_blurred", ".jpg")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
-import numpy as np
-import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+import matplotlib.pyplot as plt
+import numpy as np
 import tensorflow as tf
 from PIL import Image
 
@@ -9,9 +9,9 @@ from PIL import Image
 def hello_tensorflow():
     x = tf.constant(1.0, name="input")
     w = tf.Variable(0.8, name="weight")
-    y = tf.multiply(x,w, name="output")
+    y = tf.multiply(x, w, name="output")
     y_ = tf.constant(0.0)
-    loss = (y - y_)**2
+    loss = (y - y_) ** 2
     train_step = tf.train.AdamOptimizer(learning_rate=0.025).minimize(loss)
 
     for value in [x, w, y, y_, loss]:
@@ -28,6 +28,7 @@ def hello_tensorflow():
         sess.run(train_step)
     print(sess.run(y))
 
+
 # http://mourafiq.com/2016/08/10/playing-with-convolutions-in-tensorflow.html
 def playing_with_convolution():
     img = Image.open('data\\board.jpg')
@@ -41,70 +42,94 @@ def playing_with_convolution():
 
     convolve(img, a, rgb=True)
 
+
 def convolve(img, kernel, strides=[1, 3, 3, 1], pooling=[1, 3, 3, 1], padding='SAME', rgb=True):
-     with tf.Graph().as_default():
-         num_channels = 3
-         if not rgb:
-             num_channels = 1
-             img = img.convert('L', (0.2989, 0.5870, 0.1140, 0))  # convert to gray scale
+    with tf.Graph().as_default():
+        num_channels = 3
+        if not rgb:
+            num_channels = 1
+            img = img.convert('L', (0.2989, 0.5870, 0.1140, 0))  # convert to gray scale
 
+        # reshape image to have a leading 1 dimension
+        img = np.asarray(img, dtype='float32') / 256.
+        img_shape = img.shape
+        img_reshaped = img.reshape(1, img_shape[0], img_shape[1], num_channels)
 
-         # reshape image to have a leading 1 dimension
-         img = np.asarray(img, dtype='float32') / 256.
-         img_shape = img.shape
-         img_reshaped = img.reshape(1, img_shape[0], img_shape[1], num_channels)
+        x = tf.placeholder('float32', [1, None, None, num_channels])
+        w = tf.get_variable('w', initializer=tf.to_float(kernel))
 
-         x = tf.placeholder('float32', [1, None, None, num_channels])
-         w = tf.get_variable('w', initializer=tf.to_float(kernel))
+        # operations
+        conv = tf.nn.conv2d(x, w, strides=strides, padding=padding)
+        sig = tf.sigmoid(conv)
+        max_pool = tf.nn.max_pool(sig, ksize=[1, 3, 3, 1], strides=[1, 3, 3, 1], padding=padding)
+        avg_pool = tf.nn.avg_pool(sig, ksize=[1, 3, 3, 1], strides=[1, 3, 3, 1], padding=padding)
 
-         # operations
-         conv = tf.nn.conv2d(x, w, strides=strides, padding=padding)
-         sig = tf.sigmoid(conv)
-         max_pool = tf.nn.max_pool(sig, ksize=[1, 3, 3, 1], strides=[1, 3, 3, 1], padding=padding)
-         avg_pool = tf.nn.avg_pool(sig, ksize=[1, 3, 3, 1], strides=[1, 3, 3, 1], padding=padding)
+        init = tf.initialize_all_variables()
+        with tf.Session() as session:
+            session.run(init)
+            conv_op, sigmoid_op, avg_pool_op, max_pool_op = session.run([conv, sig, avg_pool, max_pool],
+                                                                        feed_dict={x: img_reshaped})
 
-         init = tf.initialize_all_variables()
-         with tf.Session() as session:
-             session.run(init)
-             conv_op, sigmoid_op, avg_pool_op, max_pool_op = session.run([conv, sig, avg_pool, max_pool],
-                                                                         feed_dict={x: img_reshaped})
+        show_shapes(img, conv_op, sigmoid_op, avg_pool_op, max_pool_op)
+        if rgb:
+            show_image_ops_rgb(img, conv_op, sigmoid_op, avg_pool_op, max_pool_op)
+        else:
+            show_image_ops_gray(img, conv_op, sigmoid_op, avg_pool_op, max_pool_op)
 
-         show_shapes(img, conv_op, sigmoid_op, avg_pool_op, max_pool_op)
-         if rgb:
-             show_image_ops_rgb(img, conv_op, sigmoid_op, avg_pool_op, max_pool_op)
-         else:
-             show_image_ops_gray(img, conv_op, sigmoid_op, avg_pool_op, max_pool_op)
 
 def show_image_ops_gray(img, conv_op, sigmoid_op, avg_pool_op, max_pool_op):
-     gs1 = gridspec.GridSpec(1, 5)
-     plt.subplot(gs1[0, 0]); plt.axis('off'); plt.imshow(img[:, :], cmap=plt.get_cmap('gray'))
-     plt.subplot(gs1[0, 1]); plt.axis('off'); plt.imshow(conv_op[0, :, :, 0], cmap=plt.get_cmap('gray'))
-     plt.subplot(gs1[0, 2]); plt.axis('off'); plt.imshow(sigmoid_op[0, :, :, 0], cmap=plt.get_cmap('gray'))
-     plt.subplot(gs1[0, 3]); plt.axis('off'); plt.imshow(avg_pool_op[0, :, :, 0], cmap=plt.get_cmap('gray'))
-     plt.subplot(gs1[0, 4]); plt.axis('off'); plt.imshow(max_pool_op[0, :, :, 0], cmap=plt.get_cmap('gray'))
-     plt.show()
+    gs1 = gridspec.GridSpec(1, 5)
+    plt.subplot(gs1[0, 0]);
+    plt.axis('off');
+    plt.imshow(img[:, :], cmap=plt.get_cmap('gray'))
+    plt.subplot(gs1[0, 1]);
+    plt.axis('off');
+    plt.imshow(conv_op[0, :, :, 0], cmap=plt.get_cmap('gray'))
+    plt.subplot(gs1[0, 2]);
+    plt.axis('off');
+    plt.imshow(sigmoid_op[0, :, :, 0], cmap=plt.get_cmap('gray'))
+    plt.subplot(gs1[0, 3]);
+    plt.axis('off');
+    plt.imshow(avg_pool_op[0, :, :, 0], cmap=plt.get_cmap('gray'))
+    plt.subplot(gs1[0, 4]);
+    plt.axis('off');
+    plt.imshow(max_pool_op[0, :, :, 0], cmap=plt.get_cmap('gray'))
+    plt.show()
+
 
 def show_image_ops_rgb(img, conv_op, sigmoid_op, avg_pool_op, max_pool_op):
     gs1 = gridspec.GridSpec(1, 5)
-    plt.subplot(gs1[0, 0]); plt.axis('off'); plt.imshow(img[:, :, :])
-    plt.subplot(gs1[0, 1]); plt.axis('off'); plt.imshow(conv_op[0, :, :, :])
-    plt.subplot(gs1[0, 2]); plt.axis('off'); plt.imshow(sigmoid_op[0, :, :, :])
-    plt.subplot(gs1[0, 3]); plt.axis('off'); plt.imshow(avg_pool_op[0, :, :, :])
-    plt.subplot(gs1[0, 4]); plt.axis('off'); plt.imshow(max_pool_op[0, :, :, :])
+    plt.subplot(gs1[0, 0]);
+    plt.axis('off');
+    plt.imshow(img[:, :, :])
+    plt.subplot(gs1[0, 1]);
+    plt.axis('off');
+    plt.imshow(conv_op[0, :, :, :])
+    plt.subplot(gs1[0, 2]);
+    plt.axis('off');
+    plt.imshow(sigmoid_op[0, :, :, :])
+    plt.subplot(gs1[0, 3]);
+    plt.axis('off');
+    plt.imshow(avg_pool_op[0, :, :, :])
+    plt.subplot(gs1[0, 4]);
+    plt.axis('off');
+    plt.imshow(max_pool_op[0, :, :, :])
     plt.show()
 
+
 def show_shapes(img, conv_op, sigmoid_op, avg_pool_op, max_pool_op):
-     print("""
+    print("""
          image filters (shape {})
          conv_op filters (shape {})
          sigmoid_op filters (shape {})
          avg_pool_op filters (shape {})
          max_pool_op filters (shape {})
          """.format(
-             img.shape, conv_op.shape, sigmoid_op.shape, avg_pool_op.shape, max_pool_op.shape))
+        img.shape, conv_op.shape, sigmoid_op.shape, avg_pool_op.shape, max_pool_op.shape))
+
 
 def main():
-    #hello_tensorflow()
+    # hello_tensorflow()
     playing_with_convolution()
 
 
