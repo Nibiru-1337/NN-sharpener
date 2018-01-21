@@ -2,8 +2,10 @@ import os
 import sys
 import time
 
+import PIL
 import matplotlib.pyplot as plt
 import tensorflow as tf
+from PIL import Image
 
 from ai.conv import ImageOperations
 
@@ -155,6 +157,11 @@ class NN_Sharpen:
         label_idx = label_idx[idx_of_name + 1:-4]
         return label_idx
 
+    def get_before_name(self, name):
+        idx_of_name = name.rfind('\\')
+        label_idx = name[:idx_of_name + 1]
+        return label_idx
+
     def show_image(self, img):
         # out_resized = img.reshape((img.shape[0], img.shape[1], 3))
         plt.imshow(img[:, :, :])
@@ -164,7 +171,18 @@ class NN_Sharpen:
 
     def sharpen(self, path):
 
-        filename_queue = tf.train.string_input_producer([path])
+        name = self.get_before_name(path)
+        name = name + "result.jpg"
+        try:
+            im = Image.open(path)
+            im = im.resize((self.input_height, self.input_width), PIL.Image.ANTIALIAS)
+            im.save(name, "JPEG")
+        except IOError:
+            print
+            "cannot create thumbnail for '%s'" % path
+            exit(0)
+
+        filename_queue = tf.train.string_input_producer([name])
 
         reader = tf.WholeFileReader()
 
@@ -179,7 +197,10 @@ class NN_Sharpen:
         threads = tf.train.start_queue_runners(sess=self.sess, coord=coord)
 
         test = self.sess.run(image_batch)
-        self.save_image(test, -1, "sharpened")
+        test_image = self.sess.run(self.Y, feed_dict={
+            self.input: test
+        })[0]
+        ImageOperations.saveFile(test_image, name)
         coord.request_stop()
         coord.join(threads)
 
@@ -192,14 +213,6 @@ class NN_Sharpen:
         # First let's load meta graph and restore weights
         path = '\\'.join(path.split("\\")[:-1]) + '\\'
         saver.restore(self.sess, tf.train.latest_checkpoint(path))
-
-        # get variables
-        # out_chnls = 3
-        # W1 = tf.get_variable("W1", shape=[5, 5, 3, out_chnls])
-        # B1 = tf.get_variable("B1", shape=[out_chnls])
-        # W2 = tf.get_variable("W2", shape=[5, 5, 3, out_chnls])
-        # B2 = tf.get_variable("B2", shape=[out_chnls])
-
         graph = tf.get_default_graph()
         # self.Y2 = graph.get_tensor_by_name("Y2/Maximum:0")
         self.Y = graph.get_tensor_by_name("Y:0")

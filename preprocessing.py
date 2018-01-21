@@ -23,7 +23,7 @@ def blur(npImg, chunk_size=(16, 16)):
     #     sigma = 0
     # else:
     #     sigma *= 50
-    sigma = 20
+    sigma = 50
     # print(sigma)
     result = gaussian(npImg, sigma=sigma, multichannel=True)
     # chunks[x, y] = np.array([sigma * 16*16])
@@ -44,9 +44,17 @@ def getPathsFromDir(dirPath):
     return labels
 
 
+def blur_image(path, name, out_name):
+    read_image = NN_Image(path + name)
+    npImg = read_image.getNumPyArr()
+    chunk_size = (npImg.shape[0], npImg.shape[1])
+    result = blur(npImg, chunk_size=chunk_size)
+    new_file = path + out_name
+    ImageOperations.saveFile(result, new_file)
+
+
 def blur_directory(path):
     pathlist = getPathsFromDir(path)
-
 
     i = 0
     while 1:
@@ -92,11 +100,12 @@ def wat_test():
 
 
 def main():
-    directory = '.\\data\\faces_resized\\'
+    directory = '.\\data\\to_blur\\'
     # clear_blur(directory)
     # clear_rotate(directory)
     # rotate_directory(directory)
-    blur_directory(directory)
+    # blur_directory(directory)
+    blur_image(directory,"images.jpg","blurred.jpg")
     # test()
 
 
