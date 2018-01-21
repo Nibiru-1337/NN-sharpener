@@ -174,19 +174,14 @@ class NN_Sharpen:
 
         image = tf.reshape(image, [self.input_width, self.input_height, 3])
         image_batch = tf.train.batch([image], batch_size=5, capacity=1)
-        test = self.sess.run([image_batch, image_batch])
-        output_val = self.sess.run(self.Y, feed_dict={
-            self.input: image,
-            self.img_label: image
-        })
 
-        # normalize for displaying
-        output_val[output_val > 1.0] = 1.0
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(sess=self.sess, coord=coord)
 
-        idx_of_name = path.rfind('\\')
-        no_name = path[:idx_of_name]
-
-        ImageOperations.saveFile(output_val, ".\\{}.jpg".format(no_name + "\\sharpened"))
+        test = self.sess.run(image_batch)
+        self.save_image(test, -1, "sharpened")
+        coord.request_stop()
+        coord.join(threads)
 
     # http://cv-tricks.com/tensorflow-tutorial/save-restore-tensorflow-models-quick-complete-tutorial/
     def load_model(self, path):
@@ -277,13 +272,15 @@ def main():
     validate_paths = []
     train_paths = []
     args = sys.argv
+    if len(args) == 0:
+        badSyntax()
 
     if args[1] == "--help":
         print(
             "USAGE: \n \"--method\" - can be set to train or load \n "
             "\"python nn-sharpen-v1.py --method train"
-            "--dir_teacher \"absolute\\path\\to\\dir\" "
-            "--dir_student \"absolute\\path\\to\\dir\"  "
+            " --dir_teacher \"absolute\\path\\to\\dir\" "
+            " --dir_student \"absolute\\path\\to\\dir\"  "
             "\n where dir_teacher contains sharp images, and dir_student will contain blurry ones \n"
             "To stop learning change the name of file \"stopfile\" to something else like \"stopfile2\" \n\n"
             "\"python nn-sharpen-v1.py --method load "
