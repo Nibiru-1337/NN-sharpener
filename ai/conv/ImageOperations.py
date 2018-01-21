@@ -88,6 +88,7 @@ def rotate(path, angle):
 # Method takes list of floats, change it to list of tuples of 3, meaning respectively R,G,B values
 # then it takes those values and put them on the image and later saves it
 def saveFile(out, name):
+    out[out > 1.0] = 1.0
     out = out.dot(255)
     img = Image.fromarray(out.astype('uint8'), "RGB")
     img.save(name)
