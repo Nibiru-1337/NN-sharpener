@@ -23,7 +23,7 @@ def blur(npImg, chunk_size=(16, 16)):
     #     sigma = 0
     # else:
     #     sigma *= 50
-    sigma = 50
+    sigma = 20
     # print(sigma)
     result = gaussian(npImg, sigma=sigma, multichannel=True)
     # chunks[x, y] = np.array([sigma * 16*16])
